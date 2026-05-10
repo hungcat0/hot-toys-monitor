@@ -1,24 +1,37 @@
 name: Hot Toys Monitor
 on:
   schedule:
-    - cron: "*/1 * * * *" # 每 1 分鐘行一次
-  workflow_dispatch: # 容許手動啟動
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 jobs:
-  check-rss:
+  run-monitor:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Check RSS and Notify
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install feedparser requests
+
+      - name: Run Python script
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          RSS_URL: ${{ vars.RSS_URL }}
+        run: python monitor.py # <--- 直接行個 file
+
+      - name: Commit and Push changes
         run: |
-          # 使用 curl 抓取 RSS 並用簡單的 grep 檢查最新內容
-          # 這裡建議使用一個不需要 Token 的 RSS 轉換工具網址
-          RSS_URL="你的RSS_LINK_HERE"
-
-          # 獲取最新 Post 的標題 (簡單示範)
-          CONTENT=$(curl -s $RSS_URL | grep -oP '(?<=<title>).*?(?=</title>)' | sed -n '2p')
-          LINK=$(curl -s $RSS_URL | grep -oP '(?<=<link>).*?(?=</link>)' | sed -n '2p')
-
-          # 傳送 Telegram 通知
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_TOKEN }}/sendMessage" \
-          -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
-          -d "text=🚨 Hot Toys 有新消息！%0A內容：$CONTENT%0A連結：$LINK"
+          git config --global user.name "GitHub Action"
+          git config --global user.email "actions@github.com"
+          git add last_link.txt
+          git commit -m "Update last link [skip ci]" || exit 0
+          git push
